@@ -821,6 +821,36 @@ window.addEventListener('message', async (e) => {
         await initPromise;
         reply(JSON.parse(wasm.exportHwpVerify()));
         break;
+
+      // ── ahwp-bridge Phase A2: AI tools 가 호출하는 IR method 노출 ──
+      // Phase D 에서 ahwp 의 55 tools 가 이 채널 위에 재배선될 예정.
+      // 우선 6 개 (read 4 + write 1 + caret 1) — bridge 확장 패턴 확립용.
+      // 추가 method 는 Phase A2 후속 iteration 에서 batch 로 추가.
+      case 'getSectionCount':
+        await initPromise;
+        reply(wasm.getSectionCount());
+        break;
+      case 'getParagraphCount':
+        await initPromise;
+        reply(wasm.getParagraphCount(params.sec));
+        break;
+      case 'getTextRange':
+        await initPromise;
+        reply(wasm.getTextRange(params.sec, params.para, params.charOffset, params.count));
+        break;
+      case 'searchAllText':
+        await initPromise;
+        reply(wasm.searchAllText(params.query, params.caseSensitive ?? false, params.includeCells ?? false));
+        break;
+      case 'insertText':
+        await initPromise;
+        reply(wasm.insertText(params.sec, params.para, params.charOffset, params.text));
+        break;
+      case 'getCaretPosition':
+        await initPromise;
+        reply(wasm.getCaretPosition());
+        break;
+
       default:
         reply(undefined, `Unknown method: ${method}`);
     }
