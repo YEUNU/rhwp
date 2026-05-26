@@ -822,10 +822,50 @@ window.addEventListener('message', async (e) => {
         reply(JSON.parse(wasm.exportHwpVerify()));
         break;
 
-      // ── ahwp-bridge Phase A2: AI tools 가 호출하는 IR method 노출 ──
-      // Phase D 에서 ahwp 의 55 tools 가 이 채널 위에 재배선될 예정.
-      // 우선 6 개 (read 4 + write 1 + caret 1) — bridge 확장 패턴 확립용.
-      // 추가 method 는 Phase A2 후속 iteration 에서 batch 로 추가.
+      // ── ahwp-bridge Phase A2: 범용 WasmBridge dispatcher ──
+      // ahwp 의 AI tools (Phase D) 가 wasm-bridge.ts 의 ~230 메서드를
+      // 호출할 수 있도록 단일 dispatcher 노출. 메서드 enumeration 회피.
+      //
+      //   요청: { type:'rhwp-request', id, method:'wasm',
+      //          params:{ fn:'insertText', args:[sec,para,off,text] } }
+      //   응답: { type:'rhwp-response', id, result }
+      //
+      // 보안: parent (ahwp Electron renderer) 가 신뢰된 컨텍스트.
+      // postMessage 메시지가 외부에서 올 일은 없음 (CSP frame-src 차단).
+      // 호출 가능 surface 는 WasmBridge 의 public 메서드 + 게터.
+      case 'wasm': {
+        await initPromise;
+        const { fn, args } = (params ?? {}) as { fn?: string; args?: unknown[] };
+        if (typeof fn !== 'string' || fn.length === 0) {
+          reply(undefined, "wasm: 'fn' (string) required in params");
+          break;
+        }
+        // 'wasm' 자체에 dispose / free 류 lifecycle 노출 차단 — fork 측 만
+        // 호출해야 안전. ahwp 측이 임의로 free 하면 후속 호출이 폭주.
+        if (fn === 'dispose' || fn === 'free') {
+          reply(undefined, `wasm.${fn} is not exposed via bridge`);
+          break;
+        }
+        const target = wasm as unknown as Record<string, unknown>;
+        const v = target[fn];
+        if (typeof v === 'function') {
+          const out = (v as (...a: unknown[]) => unknown).apply(
+            wasm,
+            args ?? [],
+          );
+          reply(out instanceof Promise ? await out : out);
+        } else if (v !== undefined) {
+          // Getter / instance property — return as-is. args 무시.
+          reply(v);
+        } else {
+          reply(undefined, `wasm.${fn} is not defined`);
+        }
+        break;
+      }
+
+      // Convenience cases — A2 1차 6 method. 'wasm' generic dispatcher
+      // 와 중복되지만 이미 ahwp PoC + 외부 통합 docs 가 이 이름을 직접
+      // 사용하므로 backward compat 으로 유지. 단순 forwarding.
       case 'getSectionCount':
         await initPromise;
         reply(wasm.getSectionCount());
