@@ -751,10 +751,38 @@ function showLoadError(error: unknown): void {
 
 const initPromise = initialize();
 
+// ahwp-bridge Phase D4 — caret 변경 polling. wasm.getCaretPosition() 가
+// 가벼운 호출이라 250ms 주기로 비교. 변동 시 'rhwp-event' (name:
+// 'caret-changed', data: DocumentPosition | null) 를 parent 로 broadcast.
+// iframe 이 아닌 standalone 실행 시 window.parent === window 라 자기
+// 자신에게 보냄 — message 핸들러는 'rhwp-request' 가 아니면 무시 하므로
+// 무해. RhwpBridge.handleEvent 는 source === iframe.contentWindow 인
+// 메시지만 처리 → cross-window race 안전.
+let lastCaretJson: string | null = null;
+const _caretInterval = setInterval(() => {
+  void initPromise.then(() => {
+    try {
+      const pos = wasm.getCaretPosition();
+      const json = JSON.stringify(pos);
+      if (json !== lastCaretJson) {
+        lastCaretJson = json;
+        window.parent?.postMessage(
+          { type: 'rhwp-event', name: 'caret-changed', data: pos },
+          '*',
+        );
+      }
+    } catch {
+      /* doc 미로드 / WASM 미init — 다음 tick. */
+    }
+  });
+}, 250);
+void _caretInterval; // suppress unused warning (개발 모드 SPA — 페이지 lifecycle 끝까지 유지)
+
 // ── iframe 연동 API (postMessage) ──
 // 부모 페이지에서 postMessage로 에디터를 제어할 수 있다.
 // 요청: { type: 'rhwp-request', id, method, params }
 // 응답: { type: 'rhwp-response', id, result?, error? }
+// 이벤트: { type: 'rhwp-event', name, data } — caret 변경 등 비동기 알림.
 window.addEventListener('message', async (e) => {
   const msg = e.data;
   if (!msg || typeof msg !== 'object') return;
