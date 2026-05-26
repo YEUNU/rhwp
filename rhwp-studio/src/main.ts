@@ -847,10 +847,21 @@ window.addEventListener('message', async (e) => {
           break;
         }
         const target = wasm as unknown as Record<string, unknown>;
-        const v = target[fn];
+        let v = target[fn];
+        // ahwp-bridge Phase D2c-2 — WasmBridge 미노출 메서드 (e.g.
+        // insertParagraph / deleteParagraph) 는 raw doc 로 fallback.
+        // dispose/free 는 위에서 이미 차단.
+        let appliedThis: object = wasm;
+        if (v === undefined) {
+          const doc = (wasm as unknown as { doc?: Record<string, unknown> }).doc;
+          if (doc) {
+            v = doc[fn];
+            appliedThis = doc;
+          }
+        }
         if (typeof v === 'function') {
           const out = (v as (...a: unknown[]) => unknown).apply(
-            wasm,
+            appliedThis,
             args ?? [],
           );
           reply(out instanceof Promise ? await out : out);
