@@ -778,6 +778,48 @@ const _caretInterval = setInterval(() => {
 }, 250);
 void _caretInterval; // suppress unused warning (개발 모드 SPA — 페이지 lifecycle 끝까지 유지)
 
+// ahwp-bridge — iframe 내부 keydown 을 parent 로 forward.
+//
+// 배경: 가운데 패널의 메인 컨텐츠가 rhwp-studio iframe 이 되면서
+// iframe 안에서 일어난 keydown 이벤트는 cross-frame 경계 때문에 parent
+// window 까지 bubble 안 됨. ahwp 의 글로벌 단축키 (⌘K 명령 팔레트,
+// ⌘W 탭 닫기, ⌘⇧F 검색, ⌘⇧O 아웃라인, F6 스타일, Alt+L/T/P 한컴
+// reflex) 가 iframe 포커스 상태에선 동작 안 함.
+//
+// 해결: capture 단계에서 keydown 을 가로채 parent 로 postMessage. parent
+// (ahwp 의 RhwpEditor) 가 받아 KeyboardEvent 를 합성해 window 에 dispatch
+// → AppShell 의 onKey 가 정상 발화.
+//
+// 필터: 모디파이어 (meta/ctrl/alt) 또는 F1~F12 만 forward. 일반 타이핑
+// (글자 입력) 은 parent 에 보내봐야 매치 안 되니 noise 회피.
+//
+// capture 단계 (true): iframe 내부 editor 의 자체 handler 가 preventDefault
+// 해도 capture phase 에서는 이미 발화. 단축키 두 시스템 (iframe 내부의
+// ⌘B 굵게 / parent 의 ⌘K 팔레트) 이 동시에 동작.
+document.addEventListener(
+  'keydown',
+  (e) => {
+    const isF = /^F\d{1,2}$/.test(e.key);
+    if (!e.metaKey && !e.ctrlKey && !e.altKey && !isF) return;
+    window.parent?.postMessage(
+      {
+        type: 'rhwp-event',
+        name: 'keydown',
+        data: {
+          key: e.key,
+          code: e.code,
+          metaKey: e.metaKey,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+          shiftKey: e.shiftKey,
+        },
+      },
+      '*',
+    );
+  },
+  true,
+);
+
 // ── iframe 연동 API (postMessage) ──
 // 부모 페이지에서 postMessage로 에디터를 제어할 수 있다.
 // 요청: { type: 'rhwp-request', id, method, params }
@@ -929,6 +971,22 @@ window.addEventListener('message', async (e) => {
         await initPromise;
         reply(wasm.getCaretPosition());
         break;
+
+      // ahwp-bridge — external callers (ahwp's BridgeIrHelper) that
+      // mutate the IR via the `wasm` generic dispatcher bypass the
+      // native input-handler's `afterEdit()`, which is what normally
+      // emits `document-changed` to trigger CanvasView.refreshPages().
+      // After such an external batch the IR is up-to-date but the
+      // canvas is stale. Calling this method emits the event manually
+      // so the viewer repaints to reflect the new IR.
+      case 'notifyDocumentChanged': {
+        await initPromise;
+        const reason =
+          typeof params?.reason === 'string' ? params.reason : 'external-bridge';
+        eventBus.emit('document-changed', reason);
+        reply(true);
+        break;
+      }
 
       default:
         reply(undefined, `Unknown method: ${method}`);
