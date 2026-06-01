@@ -2195,6 +2195,24 @@ export class InputHandler {
     return false;
   }
 
+  /**
+   * ahwp-bridge — 캐럿/포커스를 옮기지 않고 지정 문단이 보이도록 스크롤만
+   * 한다. AI form-fill 의 실시간 편집 위치 표시용: write op 마다 ahwp 가
+   * 호출해 채워지는 표/문단을 화면에 따라오게 한다. moveCursorTo 와 달리
+   * cursor.moveTo / focusTextarea 를 호출하지 않아 채팅 입력 포커스를
+   * 빼앗지 않는다. 좌표가 유효하지 않으면 false (무해).
+   */
+  revealParagraph(sectionIndex: number, paragraphIndex: number): boolean {
+    try {
+      const rect = this.wasm.getCursorRect(sectionIndex, paragraphIndex, 0);
+      if (!rect || rect.pageIndex === undefined) return false;
+      this.scrollCaretIntoView(rect);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** 현재 커서 위치의 누름틀 필드를 제거한다 (텍스트 유지). */
   removeCurrentField(): void {
     const pos = this.cursor.getPosition();

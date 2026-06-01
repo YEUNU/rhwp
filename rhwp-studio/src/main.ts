@@ -988,6 +988,23 @@ window.addEventListener('message', async (e) => {
         break;
       }
 
+      // ahwp-bridge — AI form-fill 실시간 편집 위치 표시. ahwp 의 runTools
+      // 가 write op 마다 채워지는 문단/표 좌표로 호출 → 편집 영역이 그곳을
+      // 화면에 따라오게 스크롤. revealParagraph 는 캐럿/포커스를 옮기지
+      // 않으므로 채팅 입력 포커스를 빼앗지 않는다. inputHandler 미초기화
+      // (문서 로드 전) 또는 좌표 무효면 false.
+      case 'scrollToParagraph': {
+        await initPromise;
+        if (!inputHandler) {
+          reply(false);
+          break;
+        }
+        const sec = Number(params?.sectionIdx ?? 0);
+        const para = Number(params?.paraIdx ?? 0);
+        reply(inputHandler.revealParagraph(sec, para));
+        break;
+      }
+
       default:
         reply(undefined, `Unknown method: ${method}`);
     }
