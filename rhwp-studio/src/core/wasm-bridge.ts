@@ -742,12 +742,15 @@ export class WasmBridge {
   insertPicture(sec: number, paraIdx: number, charOffset: number,
                 imageData: Uint8Array, width: number, height: number,
                 naturalWidthPx: number, naturalHeightPx: number,
-                extension: string, description: string = ''): { ok: boolean; paraIdx: number; controlIdx: number } {
+                extension: string, description: string = '',
+                cellPathJson: string = ''): { ok: boolean; paraIdx: number; controlIdx: number } {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     // @rhwp/core 0.7.14 — char_offset 뒤에 `cell_path_json` 인자 추가
-    // (+ 후행 paper_offset_x/y_hu optional). `''` = 본문 inline 삽입으로
-    // 0.7.13 동작과 동일. wrapper 시그니처 유지 → 호출부 무변경.
-    return JSON.parse(this.doc.insertPicture(sec, paraIdx, charOffset, '', imageData, width, height, naturalWidthPx, naturalHeightPx, extension, description));
+    // (+ 후행 paper_offset_x/y_hu optional). 빈 문자열 = 본문 inline 삽입
+    // (0.7.13 동작과 동일). `cellPathJson` 에 `[{controlIndex,cellIndex,
+    // cellParaIndex}, ...]` 경로를 주면 표 셀 안에 floating picture 로 삽입
+    // (한컴 정합). 후행 optional 이라 기존 10-arg 호출부는 무변경.
+    return JSON.parse(this.doc.insertPicture(sec, paraIdx, charOffset, cellPathJson, imageData, width, height, naturalWidthPx, naturalHeightPx, extension, description));
   }
 
   // ── 그림 속성 API ─────────────────────────────────────
