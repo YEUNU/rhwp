@@ -744,7 +744,10 @@ export class WasmBridge {
                 naturalWidthPx: number, naturalHeightPx: number,
                 extension: string, description: string = ''): { ok: boolean; paraIdx: number; controlIdx: number } {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
-    return JSON.parse(this.doc.insertPicture(sec, paraIdx, charOffset, imageData, width, height, naturalWidthPx, naturalHeightPx, extension, description));
+    // @rhwp/core 0.7.14 — char_offset 뒤에 `cell_path_json` 인자 추가
+    // (+ 후행 paper_offset_x/y_hu optional). `''` = 본문 inline 삽입으로
+    // 0.7.13 동작과 동일. wrapper 시그니처 유지 → 호출부 무변경.
+    return JSON.parse(this.doc.insertPicture(sec, paraIdx, charOffset, '', imageData, width, height, naturalWidthPx, naturalHeightPx, extension, description));
   }
 
   // ── 그림 속성 API ─────────────────────────────────────
@@ -1041,24 +1044,28 @@ export class WasmBridge {
     return this.doc.getClipboardText();
   }
 
+  // @rhwp/core 0.7.14 — copyControl/exportControlHtml/getControlImage* 에
+  // `cell_path_json` 인자가 추가됨 (본문 vs 셀/글상자 경로). 빈 문자열 `''`
+  // = 본문 컨텍스트로, 0.7.13 동작과 동일. 이 wrapper 들의 public 시그니처는
+  // 그대로 유지하여 호출부 (input-handler-*, diff-engine, ahwp bridge) 무변경.
   copyControl(sec: number, para: number, ci: number): string {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
-    return this.doc.copyControl(sec, para, ci);
+    return this.doc.copyControl(sec, para, '', ci);
   }
 
   exportControlHtml(sec: number, para: number, ci: number): string {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
-    return this.doc.exportControlHtml(sec, para, ci);
+    return this.doc.exportControlHtml(sec, para, '', ci);
   }
 
   getControlImageData(sec: number, para: number, ci: number): Uint8Array {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
-    return this.doc.getControlImageData(sec, para, ci);
+    return this.doc.getControlImageData(sec, para, '', ci);
   }
 
   getControlImageMime(sec: number, para: number, ci: number): string {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
-    return this.doc.getControlImageMime(sec, para, ci);
+    return this.doc.getControlImageMime(sec, para, '', ci);
   }
 
   clipboardHasControl(): boolean {
